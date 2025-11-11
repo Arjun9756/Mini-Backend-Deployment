@@ -1,0 +1,11 @@
+"status": true,
+    "message": "Keep This API Key And Secret Secure With Yours We Are Not Responsible For The Any Legal Compilances",
+    "userId": "e7e24b6fd63c9183e103865f8a2bfdd7daa0f4a3a590b7f67db9a888bdc181ed",
+    "name": "Arjun",
+    "api_key": "key_d3ea077616bf777be1f5affd3592a12c",
+    "api_secret_hash": "$2b$10$cBUl4d3kCe0n3dwsTPH5COAkgUnzmIv9kdDPrT89yzfAO1YFcqVtO",
+    "permission": {
+        "upload": true,
+        "download": true
+    },
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiJlN2UyNGI2ZmQ2M2M5MTgzZTEwMzg2NWY4YTJiZmRkN2RhYTBmNGEzYTU5MGI3ZjY3ZGI5YTg4OGJkYzE4MWVkIiwibmFtZSI6IkFyanVuIiwiZW1haWwiOiJhcmp1bkBnbWFpbC5jb20iLCJpYXQiOjE3NjI3NDU5ODUsImV4cCI6MTc2MjkxODc4NX0.kJNBb7JyBq4UCYewdG-WkVu1HNgyEHwOZpRVxTYYNnA"
