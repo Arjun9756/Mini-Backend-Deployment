@@ -6,7 +6,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
 const verifyToken = require('../Utils Service/TokenVerify')
 const pool = require('../SQL Server/Database')
 const crypto = require('crypto')
-const {redis:redisClient} = require('../Utils Service/Redi.utils')
+const { redis: redisClient } = require('../Utils Service/Redi.utils')
 const generateUniqueRandomId = require('../Utils Service/IDGenerate.utils')
 const { diskUpload, memoryUpload } = require('../Utils Service/Multer.utils')
 
@@ -53,6 +53,17 @@ async function getFromRedis(uid = '', signedURL = '') {
     }
     catch (error) {
         console.log(error.message)
+        return { status: false, reason: error.message }
+    }
+}
+
+async function removeFromRedis(uid = '', signedURL = '') {
+    try {
+        await redisClient.del(`user:${uid}:${signedURL}`)
+        return { status: true, message: "Redis Key Deleted" }
+    }
+    catch (error) {
+        console.log('Error While Deleting Key From Redis')
         return { status: false, reason: error.message }
     }
 }
@@ -174,7 +185,7 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
         })
     }
 
-    const { uid, op, path:filePath, exp, signature } = req.query
+    const { uid, op, path: filePath, exp, signature } = req.query
     if (!uid || !op || !path || !exp || !signature) {
         return res.status(401).json({
             status: false,
@@ -189,7 +200,7 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
             fs.unlinkSync(req.file.path)
 
         if (fs.existsSync(path.join(__dirname, '..', filePath))) {
-            fs.rmSync(path.join(__dirname, '..', filePath) , {recursive:true , force:true})
+            fs.rmSync(path.join(__dirname, '..', filePath), { recursive: true, force: true })
         }
         return res.status(401).json({
             status: false,
@@ -205,7 +216,7 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
             fs.unlinkSync(req.file.path)
 
         if (fs.existsSync(path.join(__dirname, '..', filePath))) {
-            fs.rmSync(path.join(__dirname, '..', filePath) , {recursive:true , force:true})
+            fs.rmSync(path.join(__dirname, '..', filePath), { recursive: true, force: true })
         }
 
         return res.status(401).json({
@@ -221,8 +232,11 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
         connection = await pool.getConnection()
         await connection.query('USE MINI_S3_BUCKET')
 
-        const sqlQuery = `INSERT INTO files (id,user_id,filename,storage_path,size,mime_type,shared_with,visibilty,original_name) VALUES (?,?,?,?,?,?,?,?,?)`
-        const [rows, fields] = await connection.execute(sqlQuery, [uniqueFileID , req.user._id , req.file.filename , req.file.path , req.file.size , req.file.mimetype , JSON.stringify({}) , 'private' , req.file.originalname])
+        const sqlQuery = `INSERT INTO files (id,user_id,filename,storage_path,size,mime_type,shared_with,visibilty,original_name,createdAt) VALUES (?,?,?,?,?,?,?,?,?,?)`
+        const [rows, fields] = await connection.execute(sqlQuery, [uniqueFileID, req.user._id, req.file.filename, req.file.path, req.file.size, req.file.mimetype, JSON.stringify({}), 'private', req.file.originalname, this.toString(Date.now())])
+
+        // Remove Key From Cache Server Dont Make it Await Ye Yar normal process h
+        removeFromRedis(req.user._id, `http://localhost:3000${req.originalUrl}`)
 
         if (rows.affectedRows === 0) {
             return res.status(501).json({
@@ -244,7 +258,7 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
             fs.unlinkSync(req.file.path)
 
         if (fs.existsSync(path.join(__dirname, '..', filePath))) {
-            fs.rmSync(path.join(__dirname, '..', filePath) , {recursive:true , force:true})
+            fs.rmSync(path.join(__dirname, '..', filePath), { recursive: true, force: true })
         }
 
         return res.status(501).json({
@@ -257,4 +271,86 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
             connection.release()
     }
 })
+
+router.post('/getFiles', verifyToken, async (req, res) => {
+    let connection;
+    try {
+        connection = await pool.getConnection()
+        await connection.query('USE MINI_S3_BUCKET')
+
+        // Find All Files Of Client
+        const [rows, fields] = await connection('SELECT *FROM files WHERE user_id = ?', [req.user._id])
+        return res.status(200).json({
+            status: true,
+            message: "Data is Array of Object Use [] Operator For Efficeny & Accuracy",
+            data: rows[0]
+        })
+    }
+    catch (error) {
+        console.log(`Error While Fetching The All Files Data From Server ${error.message}`)
+        return res.status(501).json({
+            status: false,
+            reason: `Internal Server Error ${error.message}`
+        })
+    }
+    finally {
+        if (connection)
+            connection.release()
+    }
+})
+
+router.post('/download', verifyToken, async (req, res) => {
+    const { storagePath, originalname, id } = req.body
+    if (!storagePath || !id) {
+        return res.status(401).json({
+            status: false,
+            message: "ID or Storage Path is Mandtory Aspect"
+        })
+    }
+
+    // Check Storage Path With Storage Path in Database
+    let connection;
+    try {
+        connection = await pool.getConnection()
+        await connection.query('USE MINI_S3_BUCKET')
+
+        const [rows, fields] = await connection.query('SELECT storage_path FROM files WHERE id = ?', [id])
+        if (rows[0].storage_path !== storagePath) {
+            return res.status(401).json({
+                status: false,
+                message: "Storage Path Does Not Match With Database"
+            })
+        }
+
+        // Check For File Existence
+        if (!fs.existsSync(storagePath)) {
+            return res.status(401).json({
+                status: false,
+                message: "File is Either Corrupted Or Contains Virus So We Have Removed It"
+            })
+        }
+
+        res.download(storagePath, originalname, (err) => {
+            if (err) {
+                console.log(err.message)
+                return res.status(500).json({
+                    status: false,
+                    message: "Could not download file"
+                })
+            }
+        })
+    }
+    catch (error) {
+        console.error(error)
+        return res.status(500).json({
+            status: false,
+            message: "Internal server error"
+        })
+    }
+    finally{
+        if(connection)
+            connection.release()
+    }
+})
+
 module.exports = router

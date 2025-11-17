@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS files(
     shared_with JSON,
     visibilty char(10) default 'private',
     original_name varchar(512),
+    createdAt varchar(212),
     FOREIGN KEY (user_id) REFERENCES users(id),
-    INDEX idx_user_id(user_id)
+    INDEX idx_user_id(user_id),
+    INDEX idx_id(id)
 )
