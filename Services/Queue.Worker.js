@@ -6,7 +6,7 @@ const generateUniqueRandomId = require('../Utils Service/IDGenerate.utils')
 
 const virusScanWorker = new Worker('virusScanQueue' , async (job)=>{
 
-    const {uniqueFileID , userId , fileNameOnServer , filePath , fileSize , fileMimeType , shared_with , visibilty , original_name} = job
+    const {uniqueFileID , userId , fileNameOnServer , filePath , fileSize , fileMimeType , shared_with , visibilty , original_name} = job.data.msg
     const {analysisId} = await scanFileWithVirusTotal(filePath)
     let connection;
 
