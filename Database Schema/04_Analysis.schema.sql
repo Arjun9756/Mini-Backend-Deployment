@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS analysis(
     user_id varchar(100),
     date_scan VARCHAR(212),
     stats JSON,
+    analysisId text,
     status enum('dangerous' , 'safe' , 'semiSafe') NOT NULL,
     INDEX index_on_status(status),
     INDEX index_on_fileId(file_id),

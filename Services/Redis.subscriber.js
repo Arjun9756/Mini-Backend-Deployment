@@ -1,6 +1,5 @@
 const { createClient } = require('../Utils Service/Redis.utils')
 const { Queue, QueueEvents } = require('bullmq')
-const { channel } = require('diagnostics_channel')
 const fs = require('fs')
 const path = require('path')
 const subscriber = createClient()
@@ -23,42 +22,43 @@ const virusScanQueueEvent = new QueueEvents('virusScanQueue', {
         username: process.env.REDIS_USERNAME,
         password: process.env.REDIS_PASSWORD
     },
-    autorun:true
+    autorun: true
 })
 
 virusScanQueueEvent.on('failed' , async ({jobId , failedReason})=>{
     const job = await virusScanQueue.getJob(jobId)
-    console.log(`Job With ID ${jobId} is Failed To Process With Reason ${failedReason}`)
+    if(job || jobId)
+        console.log(`Job With ID ${jobId} is Failed With Reason ${failedReason}`)
+    else
+        console.log(`Not Able To Fetch The Job From Queue Reason Backend Not Able to Find`)
 })
 
-async function startSubsciber() {
-    return new Promise(async (resolve , reject)=>{
-        try{
-            await subscriber.subscribe('virusScan')
-            subscriber.on('message' , async (channel , msg)=>{
-                const data = JSON.parse(msg)
-                if(channel === 'virusScan'){
-                    await virusScanQueue.add('virusScanQueue' , 
-                        {filePath:msg.filePath , msg},
-                        {
-                            attempts:4,
-                            backoff:{type:'exponential' , delay:500}, // Wait for delay * (2 ^ attempt - 1),
-                            priority:1,
-                            removeOnComplete:true,
-                            timestamp:60000, // 1 Min Me hua toh thik verna ye attempt fail or attempt 0 toh remove,
-                            removeOnFail:true
-                        }
-                    )
-                }
-            })
+async function startSubscriber() {
+    try {
+        await subscriber.subscribe('virusScan')
+        subscriber.on('message', async (channel, msg) => {
 
-            resolve()
-        }
-        catch(error){
-            console.log(error.message)
-            reject()
-        }
-    })
+            let data;
+            try{
+                data = JSON.parse(msg)
+                console.log(`JSON Conversion` , data)
+
+                const job = await virusScanQueue.add('virusScan' , data , {
+                    attempts:4,
+                    removeOnComplete:true,
+                    backoff:{type:'exponential' , delay:500}, // next attempt to be made after fail with delayed queue delay * 2 ^ (attempt - 1),
+                    removeOnFail:true,
+                    priority:1
+                })
+            }
+            catch(error){
+                console.log(`Error in Redis Virus Scan Subscriber ${error.message}`)
+            }
+        })
+    }
+    catch (error) {
+        console.log(error.message)
+        // Monitor Out The Services
+    }
 }
-
-module.exports = startSubsciber
+startSubscriber()

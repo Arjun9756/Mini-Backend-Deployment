@@ -240,7 +240,19 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
         removeFromRedis(req.user._id, `http://localhost:3000${req.originalUrl}`)
 
         // Public The Current File Transaction Into Redis Pub Sub Model
-        publishOnChannel('virusScan' , rows[0])
+        const payloadForRedisModel = {
+            uniqueFileID:uniqueFileID,
+            userId:req.user._id,
+            fileNameOnServer:req.file.filename,
+            filePath:req.file.path,
+            fileMimeType:req.file.mimetype,
+            shared_with:JSON.stringify({}),
+            visibilty:'private',
+            original_name:req.file.originalname,
+            createdAt:Date.now()
+        }
+
+        publishOnChannel('virusScan' , JSON.stringify(payloadForRedisModel))
 
         if (rows.affectedRows === 0) {
             return res.status(501).json({
@@ -284,8 +296,6 @@ router.post('/getFiles', verifyToken, async (req, res) => {
 
         // Find All Files Of Client
         const [rows, fields] = await connection.query('SELECT *FROM files WHERE user_id = ?', [req.user._id])
-        console.log(rows.length)
-        console.log(rows)
         return res.status(200).json({
             status: true,
             message: "Data is Array of Object Use [] Operator For Efficeny & Accuracy",

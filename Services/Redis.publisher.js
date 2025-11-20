@@ -9,6 +9,7 @@ async function publishOnChannel(channelName , messageToPublish)
 {
     try{
         const userReceived = await publisher.publish(channelName , messageToPublish)
+        console.log(userReceived , messageToPublish)
         return {status:true , userReceived}
     }
     catch(error){

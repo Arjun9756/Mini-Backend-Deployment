@@ -6,57 +6,60 @@ require('dotenv').config({
     path: path.join(__dirname, '..', '.env')
 })
 
+console.log(process.env.VIRUS_TOTAL_API_KEY)
+
 async function scanFileWithVirusTotal(filePath) {
     if (!filePath) {
         return { status: false, reason: `File Path is Not Valid ${filePath}` }
     }
 
-    const formData = new FormData()
+    let formData = new FormData()
     formData.append('file', fs.createReadStream(filePath))
 
     try {
-        const res = await axios.post('https://www.virustotal.com/api/v3/files', {
-            form,
-            headers: {
-                'x-apikey': process.env.VIRUS_TOTAL_API_KEY,
-                ...formData.getHeaders()
-            }
+        const res = await axios.post('https://www.virustotal.com/api/v3/files',
+            formData,
+            {
+                headers: {
+                    'x-apikey': process.env.VIRUS_TOTAL_API_KEY,
+                    ...formData.getHeaders()
+                }
 
-        })
+            })
 
         if (res.data) {
-            return {analysisId: res.data.data.id }
+            return res.data.data.id
         }
         throw new Error("Failed To Process The File")
     }
-    catch(error){
+    catch (error) {
         console.log(`Error While Processing File With Virus Total ${error.message}`)
-        throw new Error(`VirusTotal upload failed: ${error.response?.data?.error || error.message}`)
+        throw new Error(`VirusTotal upload failed: ${error.message}`)
     }
 }
 
-async function getAnalysisReport(analysisId)
-{
-    const url = `https://www/virustotal.com/api/v3/anlyses/${analysisId}`
-    try
-    {
-        while(true){
-            const res = await axios.get(url , {
-                headers:{'x-apikey':process.env.VIRUS_TOTAL_API_KEY}
+async function getAnalysisReport(analysisId) {
+    const url = `https://www.virustotal.com/api/v3/analyses/${analysisId}`
+    try {
+        let retries = 20
+        while (retries-- > 0) {
+            const res = await axios.get(url, {
+                headers: { 'x-apikey': process.env.VIRUS_TOTAL_API_KEY }
             })
 
             const status = res.data.data.attributes.status
-            if(status === 'completed'){
-                return {date:res.data.data.attributes.date , stats:res.data.data.attributes.stats}
+            if (status === 'completed') {
+                return { date: res.data.data.attributes.date, stats: res.data.data.attributes.stats }
             }
-            await new Promise((resolve , reject)=>{
-                setTimeout(resolve , 3000)      // Har 3 second bad resolve hoga tab tak await loop ko sleep krega agr reject krdiya hota toh await error throw krta
+            await new Promise((resolve, reject) => {
+                setTimeout(resolve, 3000)      // Har 3 second bad resolve hoga tab tak await loop ko sleep krega agr reject krdiya hota toh await error throw krta
             })
         }
+        throw new Error("Analysis Did Not Complete After 20 Retries")
     }
-    catch(error){
+    catch (error) {
         throw new Error(`Not Able To Get The Analysis Report ${error.message}`)
     }
 }
 
-module.exports = {getAnalysisReport , scanFileWithVirusTotal}
+module.exports = { getAnalysisReport, scanFileWithVirusTotal }

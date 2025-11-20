@@ -2,18 +2,22 @@ const { Worker } = require('bullmq')
 const { scanFileWithVirusTotal , getAnalysisReport } = require('./VirusTotal.scan')
 const pool = require('../SQL Server/Database')
 const fs = require('fs')
+const path = require('path')
 const generateUniqueRandomId = require('../Utils Service/IDGenerate.utils')
+
+require('dotenv').config({
+    path:path.join(__dirname , '..' , '.env')
+})
 
 const virusScanWorker = new Worker('virusScanQueue' , async (job)=>{
 
-    const {uniqueFileID , userId , fileNameOnServer , filePath , fileSize , fileMimeType , shared_with , visibilty , original_name} = job.data.msg
-    const {analysisId} = await scanFileWithVirusTotal(filePath)
+    const {uniqueFileID , userId , fileNameOnServer , filePath , fileSize , fileMimeType , shared_with , visibilty , original_name , createdAt} = await job.data    
+    const analysisId = await scanFileWithVirusTotal(filePath)
     let connection;
 
     if(analysisId)
     {
         try{
-
             const {date , stats} = await getAnalysisReport(analysisId)
             connection = await pool.getConnection()
             
@@ -21,7 +25,7 @@ const virusScanWorker = new Worker('virusScanQueue' , async (job)=>{
             const analysisUnqiueId = generateUniqueRandomId()
 
             if(stats.malicious > 0 || stats.suspicious > 0){
-                const [rows , fields] = await connection.query(`INSERT INTO analysis(id,file_id,user_id,date_scan,stats,status)`,[analysisUnqiueId , uniqueFileID , userId , toString(date) , stats , "dangerous"])
+                const [rows , fields] = await connection.query(`INSERT INTO analysis(id,file_id,user_id,date_scan,stats,status,analysisId)`,[analysisUnqiueId , uniqueFileID , userId , toString(date) , stats , "dangerous" , analysisId])
                 fs.unlinkSync(filePath)
                 return
             }
@@ -45,6 +49,6 @@ const virusScanWorker = new Worker('virusScanQueue' , async (job)=>{
         password:process.env.REDIS_PASSWORD,
         username:process.env.REDIS_USERNAME
     },
-    concurrency:process.env.QUEUE_WORKER_CONCURRENCY,
+    concurrency:parseInt(process.env.QUEUE_WORKER_CONCURRENCY) || 1,
     autorun:true
 })
