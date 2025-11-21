@@ -6,15 +6,13 @@ require('dotenv').config({
     path: path.join(__dirname, '..', '.env')
 })
 
-console.log(process.env.VIRUS_TOTAL_API_KEY)
-
 async function scanFileWithVirusTotal(filePath) {
     if (!filePath) {
         return { status: false, reason: `File Path is Not Valid ${filePath}` }
     }
 
     let formData = new FormData()
-    formData.append('file', fs.createReadStream(filePath))
+    formData.append('file', fs.createReadStream(path.join(__dirname , '..' , filePath)))
 
     try {
         const res = await axios.post('https://www.virustotal.com/api/v3/files',
