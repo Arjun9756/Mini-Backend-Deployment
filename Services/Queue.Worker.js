@@ -21,17 +21,17 @@ const virusScanWorker = new Worker('virusScanQueue', async (job) => {
             connection = await pool.getConnection()
 
             connection.query('USE MINI_S3_BUCKET')
-            const analysisUnqiueId = generateUniqueRandomId()
-
+            const {_id:analysisUnqiueId} = generateUniqueRandomId()
             const status = (stats.malicious > 0 || stats.suspicious ? 'dangerous' : 'safe')
-            const [rows] = await connection.query(`INSERT INTO analysis(id, file_id, user_id, date_scan, stats, status, analysisId) VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+
+            const [rows] = await connection.query(`INSERT INTO analysis(id, file_id, user_id, date_scan, stats, analysisId , status) VALUES (?, ?, ?, ?, ?, ?, ?)`, [
                 analysisUnqiueId,
                 uniqueFileID,
                 userId,
                 date.toString(),
                 JSON.stringify(stats),
-                status,
-                analysisId
+                analysisId,
+                status
             ])
 
             console.log(rows, stats)
@@ -44,13 +44,13 @@ const virusScanWorker = new Worker('virusScanQueue', async (job) => {
 
             if (rows.affectedRows === 0) {
                 console.log('Not Able to Store The Analysis Report on Database')
-                // Append FailOver Mechanism
+                // Append FailOver Mechanism 
             }
         }
         catch (error) {
             console.log(`Error While Query to SQL To Save File Report Data ${error.message}`)
             throw new Error(error.message)
-                            // Append FailOver Mechanism
+            // Append FailOver Mechanism
 
         }
     }
