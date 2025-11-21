@@ -33,14 +33,15 @@ const virusScanWorker = new Worker('virusScanQueue' , async (job)=>{
             const [rows , fields] = await connection.query(`INSERT INTO analysis(id,file_id,user_id,date_scan,stats,status)`,[analysisUnqiueId , uniqueFileID , userId , toString(date) , stats , "safe"])
             if(rows.affectedRows === 0){
                 console.log('Not Able to Store The Analysis Report on Database')
-            }
+                // Append Monitoring Queue
+            } 
         }
         catch(error){
             console.log(`Error While Query to SQL To Save File Report Data ${error.message}`)
             // Can't Return Anything It does not Make any sense
             throw new Error(error.message)
         }
-    }
+    } 
 },
 {
     connection:{
