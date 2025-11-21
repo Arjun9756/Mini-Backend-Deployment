@@ -33,7 +33,7 @@ const virusScanWorker = new Worker('virusScanQueue' , async (job)=>{
             const [rows , fields] = await connection.query(`INSERT INTO analysis(id,file_id,user_id,date_scan,stats,status)`,[analysisUnqiueId , uniqueFileID , userId , toString(date) , stats , "safe"])
             if(rows.affectedRows === 0){
                 console.log('Not Able to Store The Analysis Report on Database')
-                // Append Monitoring Queue
+                // Append Monitoring Queue And FailOver Service
             } 
         }
         catch(error){
