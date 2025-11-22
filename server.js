@@ -45,6 +45,7 @@ app.get('/confess-your-fellings', (req, res) => {
 })
 
 app.use('/api/user', userRoute)
+app.set('trust proxy' , true)
 
 app.get('/', (req, res) => {
     return res.status(200).json({
