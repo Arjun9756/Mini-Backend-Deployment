@@ -37,13 +37,6 @@ app.use(express.urlencoded({
     extended: true
 }))
 
-app.get('/confess-your-fellings', (req, res) => {
-    return res.status(200).json({
-        status: true,
-        She: "Phele Kuch Ban Toh Jao Yar Me Tumhari Hi Hu"
-    })
-})
-
 app.use('/api/user', userRoute)
 app.set('trust proxy' , true)
 
@@ -59,27 +52,23 @@ app.get('/', (req, res) => {
     })
 })
 
-app.listen(process.env.PORT || 3000, () => {
-    console.log(`Server is Running On Port ${process.env.PORT || 3000}`)
-})
+if(cluster.isPrimary || cluster.isMaster)
+{
+    console.log('Primary Process is Spawning Multiple Process Dynamic Load Balancer')
+    for(let i=0 ; i<os.cpus().length ; i++)
+        cluster.fork()
 
-// if(cluster.isPrimary || cluster.isMaster)
-// {
-//     console.log('Primary Process is Spawning Multiple Process Dynamic Load Balancer')
-//     for(let i=0 ; i<os.cpus().length ; i++)
-//         cluster.fork()
-
-//     cluster.on('exit' , (worker , code , signal)=>{
-//         console.log(`Process With PID ${worker.pid} is Died Spawning New Process`)
-//         setTimeout(()=>{
-//             cluster.fork()
-//             console.log('New Process has Joined The Pool')
-//         },5000)
-//     })
-// }
-// else
-// {
-//     app.listen(process.env.PORT || 3000 , ()=>{
-//         console.log(`Server is Running On Port ${process.env.PORT || 3000}`)
-//     })
-// }
+    cluster.on('exit' , (worker , code , signal)=>{
+        console.log(`Process With PID ${worker.pid} is Died Spawning New Process`)
+        setTimeout(()=>{
+            cluster.fork()
+            console.log('New Process has Joined The Pool')
+        },5000)
+    })
+}
+else
+{
+    app.listen(process.env.PORT || 3000 , ()=>{
+        console.log(`Server is Running On Port ${process.env.PORT || 3000}`)
+    })
+}
