@@ -53,7 +53,7 @@ async function getFromRedis(uid = '', signedURL = '') {
         throw new Error("Invalid Key Or Key is Expired")
     }
     catch (error) {
-        console.log(error.message) 
+        console.log(error.message)
         return { status: false, reason: error.message }
     }
 }
@@ -241,18 +241,18 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
 
         // Public The Current File Transaction Into Redis Pub Sub Model
         const payloadForRedisModel = {
-            uniqueFileID:uniqueFileID,
-            userId:req.user._id,
-            fileNameOnServer:req.file.filename,
-            filePath:req.file.path,
-            fileMimeType:req.file.mimetype,
-            shared_with:JSON.stringify({}),
-            visibilty:'private',
-            original_name:req.file.originalname,
-            createdAt:Date.now()
+            uniqueFileID: uniqueFileID,
+            userId: req.user._id,
+            fileNameOnServer: req.file.filename,
+            filePath: req.file.path,
+            fileMimeType: req.file.mimetype,
+            shared_with: JSON.stringify({}),
+            visibilty: 'private',
+            original_name: req.file.originalname,
+            createdAt: Date.now()
         }
 
-        publishOnChannel('virusScan' , JSON.stringify(payloadForRedisModel))
+        publishOnChannel('virusScan', JSON.stringify(payloadForRedisModel))
 
         if (rows.affectedRows === 0) {
             return res.status(501).json({
@@ -363,60 +363,153 @@ router.post('/download', verifyToken, async (req, res) => {
             message: "Internal server error"
         })
     }
-    finally{
-        if(connection)
+    finally {
+        if (connection)
             connection.release()
     }
 })
 
-router.delete('/delete' , verifyToken, async (req,res)=>{
-    const {id , storagePath} = req.body
-    if(!id || !storagePath){
+router.delete('/delete', verifyToken, async (req, res) => {
+    const { id, storagePath } = req.body
+    if (!id || !storagePath) {
         return res.status(401).json({
-            status:false,
-            message:"No Storage Path is Provided For Deletion"
+            status: false,
+            message: "No Storage Path is Provided For Deletion"
         })
     }
 
     // Check this storage path with db storage path
     let connection;
-    try{
+    try {
         connection = await pool.getConnection()
         connection.quer('USE MINI_S3_BUCKET')
 
-        const [rows , fields] = await connection.query('SELECT storage_path FROM files WHERE id = ?' , [id])
-        if(rows.length === 0){
+        const [rows, fields] = await connection.query('SELECT storage_path FROM files WHERE id = ?', [id])
+        if (rows.length === 0) {
             return res.status(202).json({
-                status:true,
-                message:"At Time of Virus Scanning We Found Some Issue So File Has Been Removed Early"
+                status: true,
+                message: "At Time of Virus Scanning We Found Some Issue So File Has Been Removed Early"
             })
         }
 
-        if(storagePath !== rows[0].storage_path){
+        if (storagePath !== rows[0].storage_path) {
             return res.status(401).json({
-                status:false,
-                message:"Storage Path You Provided is Not Valid"
+                status: false,
+                message: "Storage Path You Provided is Not Valid"
             })
         }
 
         // Check if file Exits in Server or Not
-        if(fs.existsSync(rows[0].storage_path)){
+        if (fs.existsSync(rows[0].storage_path)) {
             fs.unlinkSync(rows[0].storage_path)
             return res.status(202).json({
-                status:true,
-                message:"File Has Been Deleted Successfuly From The Server"
+                status: true,
+                message: "File Has Been Deleted Successfuly From The Server"
             })
         }
     }
-    catch(error){
+    catch (error) {
         console.log(`Error While File Deletion From The Server`)
         return res.status(501).json({
-            status:false,
-            message:`File Deletion Failed Reason ${error.message}`
+            status: false,
+            message: `File Deletion Failed Reason ${error.message}`
         })
     }
-    finally{
-        if(connection)
+    finally {
+        if (connection)
+            connection.release()
+    }
+})
+
+router.post('/shareWith', verifyToken, async (req, res) => {
+    const { emailToShareWith, fileID, filePath } = req.body
+    if (!emailToShareWith || !fileID || !filePath) {
+        return res.status(401).json({
+            status: false,
+            message: "No Email is Provided or FileID or FilePath To Share With"
+        })
+    }
+
+    if (!fs.existsSync(path.join(__dirname, '..', filePath))) {
+        return res.status(401).json({
+            status: false,
+            message: "This File Contains The Virus And Deleted From The Server So Cannot Be Share"
+        })
+    }
+
+    let connection;
+
+    try {
+        connection = await pool.getConnection()
+        connection.query('USE MINI_S3_BUCKET')
+
+        await connection.beginTransaction()
+        const [rows, fields] = await connection.query('SELECT id , shared_with FROM users WHERE id = ?', [emailToShareWith])
+
+        if (!rows[0].id) {
+            await connection.rollback()
+            return res.status(401).json({
+                status: false,
+                message: "No User is Available With This Email"
+            })
+        }
+
+        let parsedArray;
+        try {
+            parsedArray = JSON.parse(rows[0].shared_with)
+            if (!Array.isArray(parsedArray)) parsedArray = []
+        } catch {
+            parsedArray = []
+        }
+
+        const alreadyPresent = parsedArray.some((item , index , arr)=>{
+            return item.shareFileID === fileID
+        })
+
+        if (alreadyPresent) {
+            await connection.rollback()
+            return res.status(200).json({
+                status: true,
+                message: "File is Already Shared"
+            })
+        }
+
+        const payload = {
+            shareByID: req.user._id,
+            shareFileID: fileID,
+            shareFilePath: filePath,
+            shareWithEmail: emailToShareWith,
+            shareWithID: rows[0].id
+        }
+
+        parsedArray.push(payload)
+        const [updateData] = await connection.query('UPDATE users SET shared_with = ? where id = ?', [JSON.stringify(parsedArray), rows[0].id])
+
+        if (updateData.affectedRows === 0) {
+            console.log('Data Not Updated On The Database')
+            return res.status(202).json({
+                status: false,
+                message: "Data is Not Updated on Database For Sharing"
+            })
+        }
+
+        await connection.commit()
+        return res.status(200).json({
+            status: true,
+            message: "File Shared With User"
+        })
+    }
+    catch (error) {
+        console.log(`Error While File Sharing ${error.message}`)
+        await connection.rollback()
+
+        return res.status(501).json({
+            status: false,
+            message: `Internal Server Error ${error.message}`
+        })
+    }
+    finally {
+        if (connection)
             connection.release()
     }
 })

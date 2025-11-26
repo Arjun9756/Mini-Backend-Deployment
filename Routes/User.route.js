@@ -180,7 +180,7 @@ router.delete('/delete' , verifyToken , async (req,res)=>{
         connection = await pool.getConnection()
         connection.query('USE MINI_S3_BUCKET')
 
-        const [rows , fields] = await connection.query('DELET FROM users WHERE id = ?' , [req.user._id])
+        const [rows , fields] = await connection.query('DELETE FROM users WHERE id = ?' , [req.user._id])
         if(rows.affectedRows === 0){
             return res.status(501).json({
                 status:false,

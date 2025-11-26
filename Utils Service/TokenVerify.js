@@ -15,10 +15,10 @@ async function verifyToken(req, res, next) {
     let connection;
     try {
         connection = await pool.getConnection()
-        connection.query('USE MINI_S3_BUCKET')
+        await connection.query('USE MINI_S3_BUCKET')
 
         const decode = jwt.verify(token, process.env.JWT_SECRET_KEY, { algorithms: ['HS256'] })
-        const [rows , fields] = await connections.quer('SELECT id FROM users WHERE id = ?' , [decode._id])
+        const [rows , fields] = await connection.query('SELECT id FROM users WHERE id = ?' , [decode._id])
 
         if(!rows[0].id){
             return res.status(401).json({
