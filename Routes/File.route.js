@@ -119,9 +119,9 @@ async function validateData(redisSignature, payload) {
     }
 }
 
-function generateShareURL(payload){
-    const shareURL = `http://localhost:3000/api/file/shareFileAccess?shareByID=${encodeURIComponent(payload.shareByID)}&shareFileID=${encodeURIComponent(payload.shareFileID)}&shareFilePath=${encodeURIComponent(payload.shareFilePath)}&sahreWithEmail=${encodeURIComponent(payload.shareWithID)}&shareWithID=${encodeURIComponent(payload.shareWithID)}`
-    return {status:true , shareableURL:shareURL}
+function generateShareURL(payload) {
+    const shareURL = `http://localhost:3000/api/file/download?shareByID=${encodeURIComponent(payload.shareByID)}&shareFileID=${encodeURIComponent(payload.shareFileID)}&shareFilePath=${encodeURIComponent(payload.shareFilePath)}&sahreWithEmail=${encodeURIComponent(payload.shareWithID)}&shareWithID=${encodeURIComponent(payload.shareWithID)}`
+    return { status: true, shareableURL: shareURL }
 }
 
 router.get('/', (req, res) => {
@@ -329,55 +329,145 @@ router.post('/getFiles', verifyToken, async (req, res) => {
 
 router.post('/download', verifyToken, async (req, res) => {
     const { storagePath, origialName, id } = req.body
-    if (!storagePath || !id) {
+    const queryURL = req.query
+
+    if (((storagePath && id) || queryURL) === false) {
         return res.status(401).json({
             status: false,
-            message: "ID or Storage Path is Mandtory Aspect"
+            message: "ID and Storage Path or queryURL is Mandtory Aspect"
         })
     }
 
-    // Check Storage Path With Storage Path in Database
     let connection;
-    try {
-        connection = await pool.getConnection()
-        await connection.query('USE MINI_S3_BUCKET')
+    if (storagePath && id) {
+        // Check Storage Path With Storage Path in Database
+        try {
+            connection = await pool.getConnection()
+            await connection.query('USE MINI_S3_BUCKET')
 
-        const [rows, fields] = await connection.query('SELECT storage_path FROM files WHERE id = ?', [id])
-        if (rows[0].storage_path !== storagePath) {
-            return res.status(401).json({
-                status: false,
-                message: "Storage Path Does Not Match With Database"
-            })
-        }
-
-        // Check For File Existence
-        if (!fs.existsSync(storagePath)) {
-            return res.status(401).json({
-                status: false,
-                message: "File is Either Corrupted Or Contains Virus So We Have Removed It"
-            })
-        }
-
-        res.download(storagePath, origialName, (err) => {
-            if (err) {
-                console.log(err.message)
-                return res.status(500).json({
+            const [rows, fields] = await connection.query('SELECT storage_path FROM files WHERE id = ?', [id])
+            if (rows.length === 0) {
+                return res.status(404).json({
                     status: false,
-                    message: "Could not download file"
+                    message: "File Record Not Found"
                 })
             }
-        })
+
+            if (rows[0].storage_path !== storagePath) {
+                return res.status(401).json({
+                    status: false,
+                    message: "Storage Path Does Not Match With Database"
+                })
+            }
+
+            // Check For File Existence
+            if (!fs.existsSync(storagePath)) {
+                return res.status(401).json({
+                    status: false,
+                    message: "File is Either Corrupted Or Contains Virus So We Have Removed It"
+                })
+            }
+
+            res.download(storagePath, origialName || "download-file", (err) => {
+                if (err) {
+                    console.log(err.message)
+                    return res.status(500).json({
+                        status: false,
+                        message: "Could not download file"
+                    })
+                }
+            })
+        }
+        catch (error) {
+            console.error(error)
+            return res.status(500).json({
+                status: false,
+                message: "Internal server error"
+            })
+        }
+        finally {
+            if (connection)
+                connection.release()
+        }
     }
-    catch (error) {
-        console.error(error)
-        return res.status(500).json({
-            status: false,
-            message: "Internal server error"
-        })
-    }
-    finally {
-        if (connection)
-            connection.release()
+    else {
+        try {
+            const { shareByID, shareFileID, shareFilePath, shareWithEmail, shareWithID } = queryURL
+
+            if (!fs.existsSync(path.join(__dirname, '..', shareFilePath))) {
+                return res.status(401).json({
+                    status: false,
+                    message: "File is Deleted By The Owner Or File is Not Available On The Server"
+                })
+            }
+
+            connection = await pool.getConnection()
+            connection.query("USE MINI_S3_BUCKET")
+
+            const [rows, fields] = await connection.query('SELECT shared_with FROM files WHERE user_id = ?', [shareByID])
+            if (rows.length === 0) {
+                return res.status(401).json({
+                    status: false,
+                    message: "No File Data are Available Of The Sharing User in Our Database"
+                })
+            }
+            
+            console.log(typeof rows[0].shared_with)
+            console.log(rows[0].shared_with)
+
+            let parsedArray;
+            try{
+                if(Array.isArray(rows[0].shared_with))
+                    parsedArray = rows[0].shared_with
+                else if(typeof rows[0].shared_with === "object" && rows[0].shared_with !== null)
+                    parsedArray = rows[0].shared_with
+                else if(typeof rows[0].shared_with === "string")
+                    parsedArray = JSON.parse(rows[0].shared_with)
+                if (!Array.isArray(parsedArray)) parsedArray = [];
+            }
+            catch(error){
+                parsedArray = []
+            }
+
+            if (parsedArray.length === 0) {
+                return res.status(401).json({
+                    status: false,
+                    message: "Permission To File Share To You is Revoked"
+                })
+            }
+
+            let isPermit = parsedArray.some((item , index , arr)=>{
+                return item.shareFileID === shareFileID && item.shareFilePath === shareFilePath
+            })
+
+            if(!isPermit){
+                return res.status(401).json({
+                    status: false,
+                    message: "Permission To File Share To You is Revoked !Permit"
+                })
+            }
+
+            res.download(path.join(__dirname, '..', shareFilePath), origialName || "download-file", (err) => {
+                if (err) {
+                    console.log(err.message)
+                    return res.status(500).json({
+                        status: false,
+                        message: "Could not download File Try After Sometime"
+                    })
+                }
+            })
+        }
+        catch (error) {
+            console.log(`Error in Downloading File From Server`)
+            return res.status(500).json({
+                status: false,
+                message: `Error in Downloading File From Server ${error.message}`
+            })
+        }
+        finally {
+            if (connection)
+                connection.release()
+        }
     }
 })
 
@@ -391,7 +481,7 @@ router.delete('/delete', verifyToken, async (req, res) => {
     }
 
     // Check this storage path with db storage path
-    let connection; 
+    let connection;
     try {
         connection = await pool.getConnection()
         connection.query('USE MINI_S3_BUCKET')
@@ -456,9 +546,9 @@ router.post('/shareWith', verifyToken, async (req, res) => {
         connection.query('USE MINI_S3_BUCKET')
 
         await connection.beginTransaction()
-        const [rows, fields] = await connection.query(`SELECT users.id as id FROM users WHERE email = ?` ,[emailToShareWith])
+        const [row, field] = await connection.query(`SELECT users.id as id FROM users WHERE email = ?`, [emailToShareWith])
 
-        if (rows.length === 0 || !rows[0].id) {
+        if (row.length === 0 || !row[0].id) {
             await connection.rollback()
             return res.status(401).json({
                 status: false,
@@ -466,7 +556,9 @@ router.post('/shareWith', verifyToken, async (req, res) => {
             })
         }
 
+        const [rows , fields] = await connection.query('SELECT shared_with FROM files WHERE user_id = ?' , [req.user._id])
         let parsedArray;
+
         try {
             parsedArray = JSON.parse(rows[0].shared_with)
             if (!Array.isArray(parsedArray)) parsedArray = []
@@ -474,7 +566,7 @@ router.post('/shareWith', verifyToken, async (req, res) => {
             parsedArray = []
         }
 
-        const alreadyPresent = parsedArray.some((item , index , arr)=>{
+        const alreadyPresent = parsedArray.some((item, index, arr) => {
             return item.shareFileID === fileID
         })
 
@@ -491,7 +583,7 @@ router.post('/shareWith', verifyToken, async (req, res) => {
             shareFileID: fileID,
             shareFilePath: filePath,
             shareWithEmail: emailToShareWith,
-            shareWithID: rows[0].id
+            shareWithID: row[0].id
         }
 
         Object.seal(payload)   // Seal Object For Server Security
@@ -509,7 +601,7 @@ router.post('/shareWith', verifyToken, async (req, res) => {
         }
 
         await connection.commit()
-        const {status , shareableURL} = generateShareURL(payload)
+        const { status, shareableURL } = generateShareURL(payload)
 
         return res.status(200).json({
             status: true,

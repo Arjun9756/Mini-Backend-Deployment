@@ -1,5 +1,9 @@
-let arr = [1,2,3,4,5]
-console.log(arr.slice(0,2))
+function check(storagePath , id , path){
+    return (storagePath && id) || path
+}
 
-arr.splice(0,1 )
-console.log(arr)
+console.log(check("abc", 1, undefined))  // true
+console.log(check(undefined, undefined, "/a.txt")) // true
+console.log(check(undefined, 1, undefined)) // false
+console.log(check("abc", undefined, undefined)) // false
+console.log(check(undefined, undefined, undefined)) // false
