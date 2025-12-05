@@ -120,7 +120,7 @@ async function validateData(redisSignature, payload) {
 }
 
 function generateShareURL(payload) {
-    const shareURL = `http://localhost:3000/api/file/download?shareByID=${encodeURIComponent(payload.shareByID)}&shareFileID=${encodeURIComponent(payload.shareFileID)}&shareFilePath=${encodeURIComponent(payload.shareFilePath)}&sahreWithEmail=${encodeURIComponent(payload.shareWithID)}&shareWithID=${encodeURIComponent(payload.shareWithID)}`
+    const shareURL = `http://localhost:3000/api/file/download?shareByID=${encodeURIComponent(payload.shareByID)}&shareFileID=${encodeURIComponent(payload.shareFileID)}&shareFilePath=${encodeURIComponent(payload.shareFilePath)}&shareWithEmail=${encodeURIComponent(payload.shareWithEmail)}&shareWithID=${encodeURIComponent(payload.shareWithID)}`
     return { status: true, shareableURL: shareURL }
 }
 
@@ -437,7 +437,7 @@ router.post('/download', verifyToken, async (req, res) => {
             }
 
             let isPermit = parsedArray.some((item , index , arr)=>{
-                return item.shareFileID === shareFileID && item.shareFilePath === shareFilePath
+                return item.shareFileID === shareFileID && item.shareFilePath === shareFilePath && item.shareWithEmail === shareWithEmail
             })
 
             if(!isPermit){
@@ -621,6 +621,68 @@ router.post('/shareWith', verifyToken, async (req, res) => {
     finally {
         if (connection)
             connection.release()
+    }
+})
+
+router.post('/removeShare' , verifyToken , async (req,res)=>{
+
+    const {sharedWithEmail , sharedWithId} = req.body
+    if(!sharedWithEmail || !sharedWithId){
+        return res.status(401).json({
+            status:false,
+            message:"Shared With Email and Her ID is Required"
+        })
+    }
+
+    let connection;
+    try{
+        connection = await pool.getConnection()
+        connection.query('USE MINI_S3_BUCKET')
+
+        connection.beginTransaction()
+        const [rows , fields] = await connection.query(`SELECT shared_with FROM files WHERE user_id = ?` , [req.user._id])
+
+        let parsedArray;
+        if(Array.isArray(rows[0].shared_with)){
+            parsedArray = rows[0].shared_with
+        }
+        else if(typeof rows[0].shared_with === 'object' || rows[0].shared_with !== null){
+            parsedArray = rows[0].shared_with
+        }
+        else if(typeof rows[0].shared_with === 'string'){
+            parsedArray = rows[0].shared_with
+        }
+
+
+        // Time Complexity is O(N^2) Future Improvement Can Be Done By Database Normalization To Time Complexity O(logn)
+        for(let i=0 ; i<parsedArray.length ; i++)
+        {
+            if(parsedArray[i].shareWithEmail == sharedWithEmail && parsedArray[i].shareWithID == sharedWithId){
+                parsedArray.splice(i , 1)
+
+                await connection.query('UPDATE files SET shared_with = ? WHERE user_id = ?' ,[JSON.stringify(parsedArray) , req.user._id])
+                await connection.commit() // Comit Changes To Database
+
+                return res.status(200).json({
+                    status:true,
+                    message:"Shared User Removed From List"
+                })
+            }
+        }
+
+        await connection.rollback()   // RollBack To Previous State Data Consistency
+        return res.status(401).json({
+            status:false,
+            message:"Not Able To Delete The Shared User From Database Due To Email to Which Data is Shared is Revoked"
+        })
+    }
+    catch(error){
+        await connection.rollback() // RollBack To Previous State Data Consistency
+        console.log(`Error While Removing Shared User From Database ${error.message}`)
+        return res.status(500).json({
+            status:false,
+            message:error.message
+        })
     }
 })
 

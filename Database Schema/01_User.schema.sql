@@ -3,5 +3,6 @@ CREATE TABLE IF NOT EXISTS users(
     email varchar(255) UNIQUE NOT NULL,
     name varchar(100),
     password varchar(255),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_on_email (email)
 );
