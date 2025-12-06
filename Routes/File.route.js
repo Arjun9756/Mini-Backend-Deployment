@@ -707,4 +707,36 @@ router.post('/removeShare', verifyToken, async (req, res) => {
     }
 })
 
+router.delete('/delete' , verifyToken , async (req,res)=>{
+    const {storagePath , id} = req.body
+    if(!storagePath || !id){
+        return res.status(401).json({
+            statsus:false,
+            message:"Storage Path and File Id Is Required"
+        })
+    }
+
+    if(!fs.existsSync(path.join(__dirname , '..' , storagePath))){
+        return res.status(202).json({
+            status:true,
+            message:"File Contains A Virus Deleted From Server"
+        })
+    }
+
+    try{
+        fs.unlinkSync(path.join(__dirname , '..' , storagePath))
+        return res.status(200).json({
+            status:true,
+            message:"File is Removed From Server"
+        })
+    }
+    catch(error){
+        console.log(`Error While Deleting The File ${error.message}`)
+        return res.status(500).json({
+            status:false,
+            message:`Error While Deleting The File ${error.message}`
+        })
+    }
+})
+
 module.exports = router
