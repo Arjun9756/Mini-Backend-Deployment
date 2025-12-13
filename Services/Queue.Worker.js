@@ -72,9 +72,9 @@ const mailWorker = new Worker('mailQueue', async (job) => {
     try {
         if (operation == 'Shared') {
             const sendMail = await transporter.sendMail({
-                from: "Arjun Singh Negi <no-reply@aaju@dev.com",
+                from: "Arjun Singh Negi <no-reply@aaju.dev.com>",
                 to: shareWithEmail,
-                subject: `A File Share By ${shareWithEmail} Name ${name}`,
+                subject: `A File Share By ${shareWithEmail} Name ${shareName}`,
                 html: `
                     <div style="font-family: Arial; padding: 10px;">
                         <h2>📁 New File Shared With You</h2>
@@ -127,7 +127,7 @@ const mailWorker = new Worker('mailQueue', async (job) => {
         }
     }
     catch (error) {
-        console.log('Error While Sending The Mail To User Retry Throwed Error To Parent Process')
+        console.log(`Error While Sending The Mail To User Retry Throwed Error To Parent Process ${error}`)
         throw new Error(error.message || "Error While Sending The Mail To User Retry Throwed Error To Parent Process")
     }
 },

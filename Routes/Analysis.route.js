@@ -11,6 +11,7 @@ router.get('/analysisData' , verifyToken , async (req,res)=>{
         connection.query('USE MINI_S3_BUCKET')
 
         const [rows , fields] = await connection.query('SELECT *FROM WHERE user_id = ?' , [req.user._id])
+        
         return res.status(202).json({
             status:true,
             message:"Data Retrival For Analysis Of File",
