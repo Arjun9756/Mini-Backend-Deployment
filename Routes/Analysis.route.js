@@ -10,7 +10,7 @@ router.get('/analysisData' , verifyToken , async (req,res)=>{
         connection = await pool.getConnection()
         connection.query('USE MINI_S3_BUCKET')
 
-        const [rows , fields] = await connection.query('SELECT *FROM WHERE user_id = ?' , [req.user._id])
+        const [rows , fields] = await connection.query('SELECT *FROM analysis WHERE user_id = ?' , [req.user._id])
         
         return res.status(202).json({
             status:true,
