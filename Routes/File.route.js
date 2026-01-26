@@ -609,7 +609,6 @@ router.post('/shareWith', verifyToken, async (req, res) => {
             operation: "Shared",
             shareByEmail: req.user.email,
             shareWithEmail: emailToShareWith,
-            shareableURL,
             shareName:req.user.name
         }
 
