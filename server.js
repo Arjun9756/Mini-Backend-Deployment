@@ -11,6 +11,7 @@ const fileRoute = require('./Routes/File.route')
 const cors = require('cors')
 const rateLimiter = require('./Server Security/RateLimit.secure')
 const analysisRoute = require('./Routes/Analysis.route')
+const fs = require('fs')
 
 dotenv.config({
     path: path.join(__dirname, '.env')
@@ -20,6 +21,9 @@ dotenv.config({
 if (cluster.isPrimary || cluster.isMaster) {
     db()
     createDatabaseAndTable()
+    if(!fs.existsSync(path.join(__dirname , 'metrics.txt'))){
+        fs.writeFileSync(path.join(__dirname , 'metrics.txt') , '' , {encoding:'utf-8'})
+    }
 }
 
 app.use(express.json({
@@ -44,13 +48,6 @@ app.use(express.urlencoded({
 }))
 
 app.set('trust proxy' , true)
-
-// Serve static frontend files
-app.use(express.static(path.join(__dirname, 'frontend')))
-
-app.get('/', rateLimiter , (req, res) => {
-    res.sendFile(path.join(__dirname, 'frontend', 'index.html'))
-})
 
 app.get('/api', (req, res) => {
     return res.status(200).json({
