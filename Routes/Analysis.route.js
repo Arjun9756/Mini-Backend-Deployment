@@ -21,6 +21,9 @@ router.get('/analysisData' , verifyToken , async (req,res)=>{
     }
     catch(error){
         console.log(`Error While Response Generation For Analaysis ${error.message}`)
+        fs.writeFile(path.join(__dirname , '..' , 'metrics.txt') , new Date().toLocaleDateString() + error.message + "\n" , {
+            encoding:'utf-8'
+        })
         return res.status(501).json({
             status:false,
             message:`Error While Response Generation For Analaysis ${error.message}`
@@ -48,7 +51,7 @@ router.get('/:fileId' , verifyToken , async(req,res)=>{
     }
     catch(error){
         console.log(`Error in Analysis Of File ${error.message}`)
-        fs.writeFile(path.join(__dirname , '..' , 'metrics.txt') , error.message + "\n" , {
+        fs.writeFile(path.join(__dirname , '..' , 'metrics.txt') , new Date().toLocaleDateString() + error.message + "\n" , {
             encoding:'utf-8'
         })
         return res.status(501).json({

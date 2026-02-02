@@ -33,6 +33,9 @@ async function saveToRedis(uid = '', signature = '', signedURL = '') {
         await redisClient.set(`user:${uid}:${signedURL}`, signature)
         await redisClient.expire(`user:${uid}:${signedURL}`, 300)
     } catch (error) {
+        fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+            encoding: 'utf-8'
+        })
         console.log(`Error While Setting Up Key Value For Signed URL ${error.message}`)
     }
 }
@@ -53,6 +56,9 @@ async function getFromRedis(uid = '', signedURL = '') {
         throw new Error("Invalid Key Or Key is Expired")
     }
     catch (error) {
+        fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+            encoding: 'utf-8'
+        })
         console.log(error.message)
         return { status: false, reason: error.message }
     }
@@ -110,6 +116,9 @@ async function validateData(redisSignature, payload) {
         return { status: true, message: "Signatured Verified" }
     }
     catch (error) {
+        fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+            encoding: 'utf-8'
+        })
         console.log(`Error While Signature Verification With Cross Check With Database ${error.message}`)
         return { status: false, reason: `Error While Signature Verification With Cross Check With Database ${error.message}` }
     }
@@ -175,6 +184,9 @@ router.post('/generate-sign-url', verifyToken, async (req, res) => {
         })
     }
     catch (error) {
+        fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+            encoding: 'utf-8'
+        })
         console.log(`Error While Fetching API_SECRET_HASH For Signed URL ${error.message}`)
         return res.status(501).json({
             status: false,
@@ -291,6 +303,9 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
         // future processing
     }
     catch (error) {
+        fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+            encoding: 'utf-8'
+        })
         console.log(`SQL Server Issue in Insertion of File Data ${error.message}`)
         if (fs.existsSync(req.file.path))
             fs.unlinkSync(req.file.path)
@@ -325,6 +340,9 @@ router.post('/getFiles', verifyToken, async (req, res) => {
         })
     }
     catch (error) {
+        fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+            encoding: 'utf-8'
+        })
         console.log(`Error While Fetching The All Files Data From Server ${error.message}`)
         return res.status(501).json({
             status: false,
@@ -389,6 +407,9 @@ router.post('/download', verifyToken, async (req, res) => {
             })
         }
         catch (error) {
+            fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+                encoding: 'utf-8'
+            })
             console.error(error)
             return res.status(500).json({
                 status: false,
@@ -436,6 +457,9 @@ router.post('/download', verifyToken, async (req, res) => {
                 if (!Array.isArray(parsedArray)) parsedArray = [];
             }
             catch (error) {
+                fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+                    encoding: 'utf-8'
+                })
                 parsedArray = []
             }
 
@@ -468,6 +492,9 @@ router.post('/download', verifyToken, async (req, res) => {
             })
         }
         catch (error) {
+            fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+                encoding: 'utf-8'
+            })
             console.log(`Error in Downloading File From Server`)
             return res.status(500).json({
                 status: false,
@@ -513,7 +540,7 @@ router.delete('/delete', verifyToken, async (req, res) => {
 
         // Check if file Exits in Server or Not
         if (fs.existsSync(rows[0].storage_path)) {
-            fs.unlink(rows[0].storage_path , ()=>{})
+            fs.unlink(rows[0].storage_path, () => { })
             return res.status(202).json({
                 status: true,
                 message: "File Has Been Deleted Successfuly From The Server"
@@ -521,6 +548,9 @@ router.delete('/delete', verifyToken, async (req, res) => {
         }
     }
     catch (error) {
+        fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+            encoding: 'utf-8'
+        })
         console.log(`Error While File Deletion From The Server`)
         return res.status(501).json({
             status: false,
@@ -573,6 +603,9 @@ router.post('/shareWith', verifyToken, async (req, res) => {
             parsedArray = JSON.parse(rows[0].shared_with)
             if (!Array.isArray(parsedArray)) parsedArray = []
         } catch {
+            fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+                encoding: 'utf-8'
+            })
             parsedArray = []
         }
 
@@ -618,18 +651,21 @@ router.post('/shareWith', verifyToken, async (req, res) => {
             operation: "Shared",
             shareByEmail: req.user.email,
             shareWithEmail: emailToShareWith,
-            shareName:req.user.name
+            shareName: req.user.name
         }
 
-        await publishOnChannel('virusAndMailService' , JSON.stringify(payloadForEmail))
+        await publishOnChannel('virusAndMailService', JSON.stringify(payloadForEmail))
         return res.status(200).json({
             status: true,
             message: "File Shared With User",
             shareableURL,
-            sharedWithID:row[0].id
+            sharedWithID: row[0].id
         })
     }
     catch (error) {
+        fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+            encoding: 'utf-8'
+        })
         console.log(`Error While File Sharing ${error.message}`)
         await connection.rollback()
 
@@ -687,10 +723,10 @@ router.post('/removeShare', verifyToken, async (req, res) => {
                     operation: "Revoked",
                     shareByEmail: req.user.email,
                     shareWithEmail: sharedWithEmail,
-                    shareName:req.user.name
+                    shareName: req.user.name
                 }
 
-                publishOnChannel('virusAndMailService' , JSON.stringify(payloadForEmail))
+                publishOnChannel('virusAndMailService', JSON.stringify(payloadForEmail))
 
                 return res.status(200).json({
                     status: true,
@@ -706,6 +742,9 @@ router.post('/removeShare', verifyToken, async (req, res) => {
         })
     }
     catch (error) {
+        fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+            encoding: 'utf-8'
+        })
         await connection.rollback() // RollBack To Previous State Data Consistency
         console.log(`Error While Removing Shared User From Database ${error.message}`)
         return res.status(500).json({
@@ -715,72 +754,72 @@ router.post('/removeShare', verifyToken, async (req, res) => {
     }
 })
 
-router.get('/:fileID' , verifyToken , async(req,res)=>{
+router.get('/:fileID', verifyToken, async (req, res) => {
     const fileID = req.params.fileID
-    if(!fileID){
+    if (!fileID) {
         return res.status(401).json({
-            status:false,
-            message:"FileID is Mandatory Paramtere"
+            status: false,
+            message: "FileID is Mandatory Paramtere"
         })
     }
 
     let connection;
-    try{
+    try {
         connection = await pool.getConnection()
         connection.query("USE MINI_S3_BUCKET")
 
-        const [rows , fields] = await connection.query("SELECT *FROM files WHERE id = ?" , [fileID])
+        const [rows, fields] = await connection.query("SELECT *FROM files WHERE id = ?", [fileID])
         return res.status(200).json({
-            status:true,
+            status: true,
             rows,
-            message:"Data Retrived"
+            message: "Data Retrived"
         })
     }
-    catch(error){
+    catch (error) {
         console.log(`Error in File Info Get`)
-        fs.writeFile(path.join(__dirname, '..' , 'metrix.txt') , error.message + '\n' , {
-            encoding:'utf-8'
+        fs.writeFile(path.join(__dirname, '..', 'metrix.txt'), error.message + '\n', {
+            encoding: 'utf-8'
         })
 
         return res.status(500).json({
-            status:false,
-            message:"Internal Server Error"
+            status: false,
+            message: "Internal Server Error"
         })
     }
-    finally{
-        if(connection)
+    finally {
+        if (connection)
             connection.release()
     }
 })
 
-router.delete('/delete' , verifyToken , async (req,res)=>{
-    const {storagePath , id} = req.body
-    if(!storagePath || !id){
+router.delete('/delete', verifyToken, async (req, res) => {
+    const { storagePath, id } = req.body
+    if (!storagePath || !id) {
         return res.status(401).json({
-            statsus:false,
-            message:"Storage Path and File Id Is Required"
+            statsus: false,
+            message: "Storage Path and File Id Is Required"
         })
     }
 
-    if(!fs.existsSync(path.join(__dirname , '..' , storagePath))){
+    if (!fs.existsSync(path.join(__dirname, '..', storagePath))) {
         return res.status(202).json({
-            status:true,
-            message:"File Contains A Virus Deleted From Server"
+            status: true,
+            message: "File Contains A Virus Deleted From Server"
         })
     }
 
-    try{
-        fs.unlinkSync(path.join(__dirname , '..' , storagePath))
+    try {
+        fs.unlinkSync(path.join(__dirname, '..', storagePath))
         return res.status(200).json({
-            status:true,
-            message:"File is Removed From Server"
+            status: true,
+            message: "File is Removed From Server"
         })
     }
-    catch(error){
+    catch (error) {
         console.log(`Error While Deleting The File ${error.message}`)
         return res.status(500).json({
-            status:false,
-            message:`Error While Deleting The File ${error.message}`
+            status: false,
+            message: `Error While Deleting The File ${error.message}`
         })
     }
 })

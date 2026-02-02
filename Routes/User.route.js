@@ -27,10 +27,13 @@ function hashMyPassword(password = '') {
 function generateToken(_id, name, email) {
     try {
         const token = jwt.sign({ _id, name, email }, process.env.JWT_SECRET_KEY, { expiresIn: '48h', algorithm: process.env.JWT_HASH_ALGORITHM || "HS256" })
-        return {status:true , token}
+        return { status: true, token }
     }
-    catch(error){
-        return {status:false , reason:error.message}
+    catch (error) {
+        fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+            encoding: 'utf-8'
+        })
+        return { status: false, reason: error.message }
     }
 }
 
@@ -89,7 +92,9 @@ router.post('/register', async (req, res) => {
         })
     }
     catch (error) {
-
+        fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+            encoding: 'utf-8'
+        })
         console.log(`Error in SQL Execution ${error.message}`)
         if (connection)
             await connection.rollback()
@@ -108,8 +113,8 @@ router.post('/register', async (req, res) => {
 // Login Logic
 router.post('/login', async (req, res) => {
 
-    const { email, password} = req.body
-    console.log(email , password)
+    const { email, password } = req.body
+    console.log(email, password)
     if (!email || !password) {
         return res.status(401).json({
             status: false,
@@ -125,7 +130,7 @@ router.post('/login', async (req, res) => {
         await connection.query('USE MINI_S3_BUCKET')
 
         const [rows, fields] = await connection.query('SELECT *FROM users WHERE email = ?', [email])
-        if (rows.length === 0 || !bcrypt.compareSync(password , rows[0].password)) {
+        if (rows.length === 0 || !bcrypt.compareSync(password, rows[0].password)) {
             return res.status(401).json({
                 status: false,
                 message: "Either The Email or Password is Wrong"
@@ -133,75 +138,81 @@ router.post('/login', async (req, res) => {
         }
 
         // Generate Token For User
-        const tokenResult = generateToken(rows[0].id , rows[0].name , rows[0].email)
-        if(tokenResult.status === false){
+        const tokenResult = generateToken(rows[0].id, rows[0].name, rows[0].email)
+        if (tokenResult.status === false) {
             return res.status(501).json({
-                status:false,
-                message:tokenResult.reason
+                status: false,
+                message: tokenResult.reason
             })
         }
 
         // Get API Key and Secret And Send To Frontend
-        const [apiRows] = await connection.query('SELECT users.id , users.name , users.email , users.email , api_keys.id as api_unique_id , api_keys.api_key , api_keys.api_secret_hash , api_keys.permission FROM users INNER JOIN api_keys ON users.id = api_keys.user_id where api_keys.user_id = ?' ,[rows[0].id])
-        if(apiRows.length === 0){
+        const [apiRows] = await connection.query('SELECT users.id , users.name , users.email , users.email , api_keys.id as api_unique_id , api_keys.api_key , api_keys.api_secret_hash , api_keys.permission FROM users INNER JOIN api_keys ON users.id = api_keys.user_id where api_keys.user_id = ?', [rows[0].id])
+        if (apiRows.length === 0) {
             return res.status(501).json({
-                status:false,
-                message:"Something Went Wrong In Join Query Of Users and API Key"
+                status: false,
+                message: "Something Went Wrong In Join Query Of Users and API Key"
             })
         }
-         
+
         return res.status(200).json({
-            status:true,
-            message:"Keep This API Key And Secret Secure With Yours We Are Not Responsible For The Any Legal Compilances",
-            userId:apiRows[0].id,
-            name:apiRows[0].name,
-            api_key:apiRows[0].api_key,
-            api_secret_hash:apiRows[0].api_secret_hash,
-            permission:apiRows[0].permission,
-            token:tokenResult.token
+            status: true,
+            message: "Keep This API Key And Secret Secure With Yours We Are Not Responsible For The Any Legal Compilances",
+            userId: apiRows[0].id,
+            name: apiRows[0].name,
+            api_key: apiRows[0].api_key,
+            api_secret_hash: apiRows[0].api_secret_hash,
+            permission: apiRows[0].permission,
+            token: tokenResult.token
         })
     }
     catch (error) {
+        fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+            encoding: 'utf-8'
+        })
         console.log(`Error in SQL Join Operation ${error.message}`)
         return res.status(501).json({
-            status:false,
-            message:`Error in SQL Join Operation ${error.message}`
+            status: false,
+            message: `Error in SQL Join Operation ${error.message}`
         })
     }
     finally {
-        if(connection)
+        if (connection)
             connection.release()
     }
 })
 
-router.delete('/delete' , verifyToken , async (req,res)=>{
+router.delete('/delete', verifyToken, async (req, res) => {
     let connection;
-    try{
+    try {
         connection = await pool.getConnection()
         connection.query('USE MINI_S3_BUCKET')
 
-        const [rows , fields] = await connection.query('DELETE FROM users WHERE id = ?' , [req.user._id])
-        if(rows.affectedRows === 0){
+        const [rows, fields] = await connection.query('DELETE FROM users WHERE id = ?', [req.user._id])
+        if (rows.affectedRows === 0) {
             return res.status(501).json({
-                status:false,
-                message:"Error While Deleting The Current User"
+                status: false,
+                message: "Error While Deleting The Current User"
             })
         }
 
         return res.status(200).json({
-            status:true,
-            message:"User Deleted Successfuly"
+            status: true,
+            message: "User Deleted Successfuly"
         })
     }
-    catch(error){
+    catch (error) {
+        fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
+            encoding: 'utf-8'
+        })
         console.log(`Error in SQL Query  ${error.message}`)
         return res.status(501).json({
-            status:false,
-            message:`Internal Server Error in SQL ${error.message}`
+            status: false,
+            message: `Internal Server Error in SQL ${error.message}`
         })
     }
-    finally{
-        if(connection)
+    finally {
+        if (connection)
             connection.release()
     }
 })
