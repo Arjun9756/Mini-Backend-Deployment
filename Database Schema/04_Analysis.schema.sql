@@ -9,6 +9,10 @@ CREATE TABLE IF NOT EXISTS analysis(
     INDEX index_on_status(status),
     INDEX index_on_fileId(file_id),
     INDEX index_on_userId(user_id),
-    FOREIGN KEY (file_Id) REFERENCES files(id),
+    FOREIGN KEY (file_id) REFERENCES files(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
 );

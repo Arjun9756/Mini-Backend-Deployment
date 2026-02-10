@@ -35,7 +35,7 @@ async function saveToRedis(uid = '', signature = '', signedURL = '') {
     } catch (error) {
         fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
             encoding: 'utf-8'
-        })
+        }, (err) => { })
         console.log(`Error While Setting Up Key Value For Signed URL ${error.message}`)
     }
 }
@@ -58,7 +58,7 @@ async function getFromRedis(uid = '', signedURL = '') {
     catch (error) {
         fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
             encoding: 'utf-8'
-        })
+        }, (err) => { })
         console.log(error.message)
         return { status: false, reason: error.message }
     }
@@ -118,7 +118,7 @@ async function validateData(redisSignature, payload) {
     catch (error) {
         fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
             encoding: 'utf-8'
-        })
+        }, (err) => { })
         console.log(`Error While Signature Verification With Cross Check With Database ${error.message}`)
         return { status: false, reason: `Error While Signature Verification With Cross Check With Database ${error.message}` }
     }
@@ -186,7 +186,7 @@ router.post('/generate-sign-url', verifyToken, async (req, res) => {
     catch (error) {
         fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
             encoding: 'utf-8'
-        })
+        }, (err) => { })
         console.log(`Error While Fetching API_SECRET_HASH For Signed URL ${error.message}`)
         return res.status(501).json({
             status: false,
@@ -305,7 +305,7 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
     catch (error) {
         fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
             encoding: 'utf-8'
-        })
+        }, (err) => { })
         console.log(`SQL Server Issue in Insertion of File Data ${error.message}`)
         if (fs.existsSync(req.file.path))
             fs.unlinkSync(req.file.path)
@@ -332,7 +332,51 @@ router.post('/getFiles', verifyToken, async (req, res) => {
         await connection.query('USE MINI_S3_BUCKET')
 
         // Find All Files Of Client
-        const [rows, fields] = await connection.query('SELECT *FROM files WHERE user_id = ?', [req.user._id])
+        const query = `SELECT 
+                f.id,
+                f.user_id,
+                f.filename,
+                f.storage_path,
+                f.size,
+                f.mime_type,
+                f.shared_with,
+                f.visibilty,
+                f.original_name,
+                f.createdAt,
+                'owned' as file_type,
+                NULL as owner_name,
+                NULL as owner_email
+            FROM files f
+            WHERE f.user_id = ?
+            
+            UNION
+            
+            SELECT 
+                f.id,
+                f.user_id,
+                f.filename,
+                f.storage_path,
+                f.size,
+                f.mime_type,
+                f.shared_with,
+                f.visibilty,
+                f.original_name,
+                f.createdAt,
+                'shared' as file_type,
+                u.name as owner_name,
+                u.email as owner_email
+            FROM files f
+            INNER JOIN users u ON f.user_id = u.id
+            WHERE JSON_CONTAINS(
+                f.shared_with,
+                JSON_OBJECT('shareWithID', ?),
+                '$'
+            )
+            
+            ORDER BY createdAt DESC     
+        `
+
+        const [rows, fields] = await connection.query(query, [req.user._id , req.user._id])
         return res.status(200).json({
             status: true,
             message: "Data is Array of Object Use [] Operator For Efficeny & Accuracy",
@@ -342,7 +386,7 @@ router.post('/getFiles', verifyToken, async (req, res) => {
     catch (error) {
         fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
             encoding: 'utf-8'
-        })
+        }, (err) => { })
         console.log(`Error While Fetching The All Files Data From Server ${error.message}`)
         return res.status(501).json({
             status: false,
@@ -409,7 +453,7 @@ router.post('/download', verifyToken, async (req, res) => {
         catch (error) {
             fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
                 encoding: 'utf-8'
-            })
+            }, (err) => { })
             console.error(error)
             return res.status(500).json({
                 status: false,
@@ -459,7 +503,7 @@ router.post('/download', verifyToken, async (req, res) => {
             catch (error) {
                 fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
                     encoding: 'utf-8'
-                })
+                }, (err) => { })
                 parsedArray = []
             }
 
@@ -494,7 +538,7 @@ router.post('/download', verifyToken, async (req, res) => {
         catch (error) {
             fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
                 encoding: 'utf-8'
-            })
+            }, (err) => { })
             console.log(`Error in Downloading File From Server`)
             return res.status(500).json({
                 status: false,
@@ -521,7 +565,7 @@ router.delete('/delete', verifyToken, async (req, res) => {
     let connection;
     try {
         connection = await pool.getConnection()
-        connection.query('USE MINI_S3_BUCKET')
+        await connection.query('USE MINI_S3_BUCKET')
 
         const [rows, fields] = await connection.query('SELECT storage_path FROM files WHERE id = ?', [id])
         if (rows.length === 0) {
@@ -540,17 +584,28 @@ router.delete('/delete', verifyToken, async (req, res) => {
 
         // Check if file Exits in Server or Not
         if (fs.existsSync(rows[0].storage_path)) {
-            fs.unlink(rows[0].storage_path, () => { })
-            return res.status(202).json({
+            fs.unlinkSync(rows[0].storage_path)
+        }
+        
+        // Delete from database
+        const [deleteResult] = await connection.query('DELETE FROM files WHERE id = ?', [id])
+        
+        if (deleteResult.affectedRows > 0) {
+            return res.status(200).json({
                 status: true,
-                message: "File Has Been Deleted Successfuly From The Server"
+                message: "File Has Been Deleted Successfully From Server And Database"
+            })
+        } else {
+            return res.status(500).json({
+                status: false,
+                message: "File Deleted From Disk But Failed To Delete From Database"
             })
         }
     }
     catch (error) {
         fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
             encoding: 'utf-8'
-        })
+        }, (err) => { })
         console.log(`Error While File Deletion From The Server`)
         return res.status(501).json({
             status: false,
@@ -583,7 +638,7 @@ router.post('/shareWith', verifyToken, async (req, res) => {
 
     try {
         connection = await pool.getConnection()
-        connection.query('USE MINI_S3_BUCKET')
+        await connection.query('USE MINI_S3_BUCKET')
 
         await connection.beginTransaction()
         const [row, field] = await connection.query(`SELECT users.id as id FROM users WHERE email = ?`, [emailToShareWith])
@@ -602,10 +657,10 @@ router.post('/shareWith', verifyToken, async (req, res) => {
         try {
             parsedArray = JSON.parse(rows[0].shared_with)
             if (!Array.isArray(parsedArray)) parsedArray = []
-        } catch {
+        } catch (error) {
             fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
                 encoding: 'utf-8'
-            })
+            }, (err) => { })
             parsedArray = []
         }
 
@@ -665,7 +720,7 @@ router.post('/shareWith', verifyToken, async (req, res) => {
     catch (error) {
         fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
             encoding: 'utf-8'
-        })
+        }, (err) => { })
         console.log(`Error While File Sharing ${error.message}`)
         await connection.rollback()
 
@@ -693,7 +748,7 @@ router.post('/removeShare', verifyToken, async (req, res) => {
     let connection;
     try {
         connection = await pool.getConnection()
-        connection.query('USE MINI_S3_BUCKET')
+        await connection.query('USE MINI_S3_BUCKET')
 
         connection.beginTransaction()
         const [rows, fields] = await connection.query(`SELECT shared_with FROM files WHERE user_id = ?`, [req.user._id])
@@ -744,7 +799,7 @@ router.post('/removeShare', verifyToken, async (req, res) => {
     catch (error) {
         fs.writeFile(path.join(__dirname, '..', 'metrics.txt'), new Date().toLocaleDateString() + error.message + "\n", {
             encoding: 'utf-8'
-        })
+        }, (err) => { })
         await connection.rollback() // RollBack To Previous State Data Consistency
         console.log(`Error While Removing Shared User From Database ${error.message}`)
         return res.status(500).json({
@@ -766,7 +821,7 @@ router.get('/:fileID', verifyToken, async (req, res) => {
     let connection;
     try {
         connection = await pool.getConnection()
-        connection.query("USE MINI_S3_BUCKET")
+        await connection.query("USE MINI_S3_BUCKET")
 
         const [rows, fields] = await connection.query("SELECT *FROM files WHERE id = ?", [fileID])
         return res.status(200).json({
@@ -779,7 +834,7 @@ router.get('/:fileID', verifyToken, async (req, res) => {
         console.log(`Error in File Info Get`)
         fs.writeFile(path.join(__dirname, '..', 'metrix.txt'), error.message + '\n', {
             encoding: 'utf-8'
-        })
+        }, (err) => { })
 
         return res.status(500).json({
             status: false,
@@ -791,37 +846,4 @@ router.get('/:fileID', verifyToken, async (req, res) => {
             connection.release()
     }
 })
-
-router.delete('/delete', verifyToken, async (req, res) => {
-    const { storagePath, id } = req.body
-    if (!storagePath || !id) {
-        return res.status(401).json({
-            statsus: false,
-            message: "Storage Path and File Id Is Required"
-        })
-    }
-
-    if (!fs.existsSync(path.join(__dirname, '..', storagePath))) {
-        return res.status(202).json({
-            status: true,
-            message: "File Contains A Virus Deleted From Server"
-        })
-    }
-
-    try {
-        fs.unlinkSync(path.join(__dirname, '..', storagePath))
-        return res.status(200).json({
-            status: true,
-            message: "File is Removed From Server"
-        })
-    }
-    catch (error) {
-        console.log(`Error While Deleting The File ${error.message}`)
-        return res.status(500).json({
-            status: false,
-            message: `Error While Deleting The File ${error.message}`
-        })
-    }
-})
-
 module.exports = router

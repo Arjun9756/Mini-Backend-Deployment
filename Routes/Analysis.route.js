@@ -9,7 +9,7 @@ router.get('/analysisData' , verifyToken , async (req,res)=>{
     let connection;
     try{
         connection = await pool.getConnection()
-        connection.query('USE MINI_S3_BUCKET')
+        await connection.query('USE MINI_S3_BUCKET')
 
         const [rows , fields] = await connection.query('SELECT *FROM analysis WHERE user_id = ?' , [req.user._id])
         
@@ -23,7 +23,7 @@ router.get('/analysisData' , verifyToken , async (req,res)=>{
         console.log(`Error While Response Generation For Analaysis ${error.message}`)
         fs.writeFile(path.join(__dirname , '..' , 'metrics.txt') , new Date().toLocaleDateString() + error.message + "\n" , {
             encoding:'utf-8'
-        })
+        },(err)=>{})
         return res.status(501).json({
             status:false,
             message:`Error While Response Generation For Analaysis ${error.message}`
@@ -53,7 +53,7 @@ router.get('/:fileId' , verifyToken , async(req,res)=>{
         console.log(`Error in Analysis Of File ${error.message}`)
         fs.writeFile(path.join(__dirname , '..' , 'metrics.txt') , new Date().toLocaleDateString() + error.message + "\n" , {
             encoding:'utf-8'
-        })
+        },(err)=>{})
         return res.status(501).json({
             status:false,
             message:"File Has Been Removed From The Server As it Contains The Virus"

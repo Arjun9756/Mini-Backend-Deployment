@@ -17,12 +17,12 @@ const virusScanWorker = new Worker('virusScanQueue', async (job) => {
     let connection;
 
     if (analysisId) {
+        const { _id: analysisUnqiueId } = generateUniqueRandomId()
         try {
             const { date, stats } = await getAnalysisReport(analysisId)
             connection = await pool.getConnection()
 
             connection.query('USE MINI_S3_BUCKET')
-            const { _id: analysisUnqiueId } = generateUniqueRandomId()
             const status = (stats.malicious > 0 || stats.suspicious ? 'dangerous' : 'safe')
 
             const [rows] = await connection.query(`INSERT INTO analysis(id, file_id, user_id, date_scan, stats, analysisId , status) VALUES (?, ?, ?, ?, ?, ?, ?)`, [
@@ -63,20 +63,30 @@ const virusScanWorker = new Worker('virusScanQueue', async (job) => {
             console.log(`Error While Query to SQL To Save File Report Data ${error.message}`)
             let status = 'dangerous'
             let date = Date.now()
-            const [rows] = await connection.query(`INSERT INTO analysis(id, file_id, user_id, date_scan, stats, analysisId , status) VALUES (?, ?, ?, ?, ?, ?, ?)`, [
-                analysisUnqiueId,
-                uniqueFileID,
-                userId,
-                date,
-                JSON.stringify({}),
-                analysisId,
-                status
-            ])
+
+            if (fs.existsSync(path.join(__dirname, '..', filePath))) {
+                fs.unlinkSync(path.join(__dirname, '..', filePath))
+            }
+
+            try {
+                const [rows] = await connection.query(`INSERT INTO analysis(id, file_id, user_id, date_scan, stats, analysisId , status) VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+                    analysisUnqiueId,
+                    uniqueFileID,
+                    userId,
+                    date,
+                    JSON.stringify({}),
+                    analysisId,
+                    status
+                ])
+            }
+            catch (error) {
+                console.log("Failed to Save on DB")
+            }
             throw new Error(error.message)
             // Append FailOver Mechanism
         }
-        finally{
-            if(connection){
+        finally {
+            if (connection) {
                 connection.release()
             }
         }
@@ -156,8 +166,8 @@ const mailWorker = new Worker('mailQueue', async (job) => {
         console.log(`Error While Sending The Mail To User Retry Throwed Error To Parent Process ${error}`)
         throw new Error(error.message || "Error While Sending The Mail To User Retry Throwed Error To Parent Process")
     }
-    finally{
-        
+    finally {
+
     }
 },
     {
