@@ -1,5 +1,4 @@
 .env
 node_modules
 .vscode
-ca.pem
 uploads
