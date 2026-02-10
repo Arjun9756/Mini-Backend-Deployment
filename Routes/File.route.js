@@ -82,7 +82,8 @@ async function removeFromRedis(uid = '', signedURL = '') {
  * @returns {Object}
  */
 function generateSignedURL(payload = {}, signature = '') {
-    const signedURL = `http://localhost:3000/api/file/file-access?uid=${encodeURIComponent(payload.uid)}&path=${encodeURIComponent(payload.path)}&op=${encodeURIComponent(payload.op)}&exp=${encodeURIComponent(payload.exp)}&signature=${encodeURIComponent(signature)}`
+    const baseURL = process.env.BASE_URL || 'http://localhost:3000'
+    const signedURL = `${baseURL}/api/file/file-access?uid=${encodeURIComponent(payload.uid)}&path=${encodeURIComponent(payload.path)}&op=${encodeURIComponent(payload.op)}&exp=${encodeURIComponent(payload.exp)}&signature=${encodeURIComponent(signature)}`
     return { status: true, signedURL }
 }
 
@@ -129,7 +130,8 @@ async function validateData(redisSignature, payload) {
 }
 
 function generateShareURL(payload) {
-    const shareURL = `http://localhost:3000/api/file/download?shareByID=${encodeURIComponent(payload.shareByID)}&shareFileID=${encodeURIComponent(payload.shareFileID)}&shareFilePath=${encodeURIComponent(payload.shareFilePath)}&shareWithEmail=${encodeURIComponent(payload.shareWithEmail)}&shareWithID=${encodeURIComponent(payload.shareWithID)}`
+    const baseURL = process.env.BASE_URL || 'http://localhost:3000'
+    const shareURL = `${baseURL}/api/file/download?shareByID=${encodeURIComponent(payload.shareByID)}&shareFileID=${encodeURIComponent(payload.shareFileID)}&shareFilePath=${encodeURIComponent(payload.shareFilePath)}&shareWithEmail=${encodeURIComponent(payload.shareWithEmail)}&shareWithID=${encodeURIComponent(payload.shareWithID)}`
     return { status: true, shareableURL: shareURL }
 }
 
@@ -218,7 +220,8 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
     }
 
     //  Fetch Signature form Redis 
-    const { status, data, reason } = await getFromRedis(uid, `http://localhost:3000${req.originalUrl}`)
+    const baseURL = process.env.BASE_URL || 'http://localhost:3000'
+    const { status, data, reason } = await getFromRedis(uid, `${baseURL}${req.originalUrl}`)
     if (!status) {
         if (fs.existsSync(req.file.path))
             fs.unlinkSync(req.file.path)
@@ -260,7 +263,8 @@ router.post('/file-access', verifyToken, diskUpload.single('file'), async (req, 
         const [rows, fields] = await connection.execute(sqlQuery, [uniqueFileID, req.user._id, req.file.filename, req.file.path, req.file.size, req.file.mimetype, JSON.stringify({}), 'public', req.file.originalname, Date.now()])
 
         // Remove Key From Cache Server Dont Make it Await Ye Yar normal process h
-        removeFromRedis(req.user._id, `http://localhost:3000${req.originalUrl}`)
+        const baseURL = process.env.BASE_URL || 'http://localhost:3000'
+        removeFromRedis(req.user._id, `${baseURL}${req.originalUrl}`)
 
         // Public The Current File Transaction Into Redis Pub Sub Model
         const payloadForRedisModel = {

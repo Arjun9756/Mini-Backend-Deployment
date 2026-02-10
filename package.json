@@ -1,4 +1,18 @@
 {
+  "name": "mini-s3-bucket",
+  "version": "1.0.0",
+  "description": "Cloud File Storage System with Virus Scanning",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "server": "node server.js",
+    "worker": "node Services/Queue.Worker.js",
+    "subscriber": "node Services/Redis.subscriber.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "axios": "^1.13.2",
     "bcryptjs": "^3.0.3",

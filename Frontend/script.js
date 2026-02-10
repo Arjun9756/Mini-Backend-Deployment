@@ -9,8 +9,10 @@ let analysisRefreshInterval = null;
 let isLoadingAnalysis = false;
 let isLoadingFiles = false;
 
-// API Base URL - Update this with your Render backend URL
-const API_BASE = 'http://localhost:3000/api/';
+// API Base URL - Automatically detects environment
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:3000/api/'
+    : `${window.location.origin}/api/`;
 
 // Utility function for API requests with timeout and rate limit handling
 async function apiRequest(url, options = {}) {
