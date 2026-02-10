@@ -230,7 +230,7 @@ setInterval(async () => {
 }, 24 * 60 * 60 * 1000) // 24 hours
 
 // Serve Frontend for all non-API routes (SPA support)
-app.get('*', (req, res) => {
+app.get('/*', (req, res) => {
     res.sendFile(path.join(__dirname, 'Frontend', 'index.html'))
 })
 
