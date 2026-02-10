@@ -134,6 +134,7 @@ const mailWorker = new Worker('mailQueue', async (job) => {
                     </div>
                 `
             })
+            console.log('✅ Email sent successfully to:', shareWithEmail)
         }
         else {
             await transporter.sendMail({
@@ -160,11 +161,14 @@ const mailWorker = new Worker('mailQueue', async (job) => {
                     </div>
                 `
             })
+            console.log('✅ Revocation email sent successfully to:', shareWithEmail)
         }
     }
     catch (error) {
-        console.log(`Error While Sending The Mail To User Retry Throwed Error To Parent Process ${error}`)
-        throw new Error(error.message || "Error While Sending The Mail To User Retry Throwed Error To Parent Process")
+        console.warn(`⚠️  Email sending failed (SMTP unavailable): ${error.message}`)
+        console.warn(`⚠️  File sharing will work, but email notification was not sent to: ${shareWithEmail}`)
+        // Don't throw error - let the job complete successfully even if email fails
+        // The file sharing functionality should work even without email notifications
     }
     finally {
 

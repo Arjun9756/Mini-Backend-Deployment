@@ -24,11 +24,14 @@ const transporter = nodemailer.createTransport({
     maxConnections:5
 })
 
+// Gracefully handle SMTP verification - don't crash if email service is unavailable
 transporter.verify((err) => {
   if (err) {
-    console.error('SMTP VERIFY FAILED:', err)
+    console.warn('⚠️  SMTP Connection Failed:', err.message)
+    console.warn('⚠️  Email notifications will be disabled. App will continue without email functionality.')
+    console.warn('💡 Tip: Use SendGrid, Mailgun, or upgrade Render plan for SMTP access')
   } else {
-    console.log('SMTP READY')
+    console.log('✅ SMTP Ready - Email notifications enabled')
   }
 })
 
