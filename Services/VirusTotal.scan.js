@@ -11,8 +11,16 @@ async function scanFileWithVirusTotal(filePath) {
         return { status: false, reason: `File Path is Not Valid ${filePath}` }
     }
 
+    const fullPath = path.join(__dirname, '..', filePath)
+    
+    // Check if file exists before trying to scan
+    if (!fs.existsSync(fullPath)) {
+        console.error(`File not found at path: ${fullPath}`)
+        throw new Error(`ENOENT: no such file or directory, open '${fullPath}'`)
+    }
+
     let formData = new FormData()
-    formData.append('file', fs.createReadStream(path.join(__dirname , '..' , filePath)))
+    formData.append('file', fs.createReadStream(fullPath))
 
     try {
         const res = await axios.post('https://www.virustotal.com/api/v3/files',
@@ -21,17 +29,19 @@ async function scanFileWithVirusTotal(filePath) {
                 headers: {
                     'x-apikey': process.env.VIRUS_TOTAL_API_KEY,
                     ...formData.getHeaders()
-                }
-
+                },
+                timeout: 60000 // 60 second timeout
             })
 
         if (res.data) {
+            console.log(`✅ File uploaded to VirusTotal successfully. Analysis ID: ${res.data.data.id}`)
             return res.data.data.id
         }
         throw new Error("Failed To Process The File")
     }
     catch (error) {
-        console.log(`Error While Processing File With Virus Total ${error.message}`)
+        console.error(`❌ Error While Processing File With Virus Total: ${error.message}`)
+        console.error(`File path attempted: ${fullPath}`)
         throw new Error(`VirusTotal upload failed: ${error.message}`)
     }
 }
@@ -39,23 +49,44 @@ async function scanFileWithVirusTotal(filePath) {
 async function getAnalysisReport(analysisId) {
     const url = `https://www.virustotal.com/api/v3/analyses/${analysisId}`
     try {
-        let retries = 20
+        let retries = 30 // Increased from 20 to 30
+        let attemptCount = 0
+        
+        console.log(`🔍 Starting analysis polling for ID: ${analysisId}`)
+        
         while (retries-- > 0) {
-            const res = await axios.get(url, {
-                headers: { 'x-apikey': process.env.VIRUS_TOTAL_API_KEY }
-            })
+            attemptCount++
+            
+            try {
+                const res = await axios.get(url, {
+                    headers: { 'x-apikey': process.env.VIRUS_TOTAL_API_KEY },
+                    timeout: 10000 // 10 second timeout per request
+                })
 
-            const status = res.data.data.attributes.status
-            if (status === 'completed') {
-                return { date: res.data.data.attributes.date, stats: res.data.data.attributes.stats }
+                const status = res.data.data.attributes.status
+                console.log(`📊 Analysis attempt ${attemptCount}: Status = ${status}`)
+                
+                if (status === 'completed') {
+                    console.log(`✅ Analysis completed successfully after ${attemptCount} attempts`)
+                    return { date: res.data.data.attributes.date, stats: res.data.data.attributes.stats }
+                }
+                
+                // Wait 8 seconds between retries (increased from 5)
+                await new Promise((resolve) => setTimeout(resolve, 8000))
+                
+            } catch (requestError) {
+                console.warn(`⚠️  Request failed on attempt ${attemptCount}: ${requestError.message}`)
+                // Continue retrying even if individual request fails
+                await new Promise((resolve) => setTimeout(resolve, 5000))
             }
-            await new Promise((resolve, reject) => {
-                setTimeout(resolve, 5000)      // Har 5 second bad resolve hoga tab tak await loop ko sleep krega agr reject krdiya hota toh await error throw krta
-            })
         }
-        throw new Error("Analysis Did Not Complete After 20 Retries")
+        
+        console.error(`❌ Analysis did not complete after ${attemptCount} attempts (${attemptCount * 8 / 60} minutes)`)
+        throw new Error(`Analysis Did Not Complete After ${attemptCount} Retries`)
+        
     }
     catch (error) {
+        console.error(`❌ Fatal error in getAnalysisReport: ${error.message}`)
         throw new Error(`Not Able To Get The Analysis Report ${error.message}`)
     }
 }
